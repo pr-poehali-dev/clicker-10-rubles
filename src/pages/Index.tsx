@@ -137,7 +137,10 @@ export default function Index() {
                 boxShadow: "0 8px 32px rgba(251,191,36,0.35), 0 2px 8px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)",
               }}
             >
-              <span className="text-6xl select-none">💰</span>
+              <div className="flex flex-col items-center gap-1 select-none">
+                <span className="text-5xl">💰</span>
+                <span className="text-slate-900 font-montserrat font-black text-lg leading-none tracking-tight">+10 ₽</span>
+              </div>
 
               {floatingCoins.map((coin) => (
                 <div
