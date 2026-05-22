@@ -81,39 +81,57 @@ export default function Withdraw() {
   const [phone, setPhone] = useState("");
   const [walletNum, setWalletNum] = useState("");
   const [step, setStep] = useState<Step>(1);
-  const [showGateway, setShowGateway] = useState(false);
-  const [actionType, setActionType] = useState<"pay" | "topup">("pay");
-  const [txSuccess, setTxSuccess] = useState(false);
-  const [smsCode, setSmsCode] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
+  const [txStatus, setTxStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [txId, setTxId] = useState("");
+  const [processingStep, setProcessingStep] = useState(0);
 
-  const [balance] = useState(() => parseFloat(localStorage.getItem("clickerBalance") || "0"));
+  const [balance, setBalance] = useState(() => parseFloat(localStorage.getItem("clickerBalance") || "0"));
   const fmt = (v: number) => new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2 }).format(v);
 
   const bank = banks.find((b) => b.id === selectedBank);
   const amountNum = parseFloat(amount) || 0;
   const canWithdraw = balance >= 1000;
 
-  const handleSendCode = () => {
-    setCodeSent(true);
-  };
+  const processingSteps = [
+    "Подключение к платёжному шлюзу...",
+    "Авторизация в " + (bank?.name || "банке") + "...",
+    "Проверка реквизитов...",
+    "Шифрование данных SSL/TLS...",
+    "Отправка транзакции...",
+    "Подтверждение банком...",
+  ];
 
   const handleConfirm = () => {
-    if (!codeSent) return;
-    setTxSuccess(true);
-    setTimeout(() => {
-      setShowGateway(false);
-      setTxSuccess(false);
-      setStep(1);
-      setSelectedBank(null);
-      setAmount("");
-      setCardNum("");
-      setCardHolder("");
-      setPhone("");
-      setWalletNum("");
-      setSmsCode("");
-      setCodeSent(false);
-    }, 3500);
+    if (amountNum < 1000 || amountNum > balance) return;
+    setTxStatus("processing");
+    setProcessingStep(0);
+    const newId = "TXN-" + Date.now().toString().slice(-10);
+    setTxId(newId);
+
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      setProcessingStep(step);
+      if (step >= processingSteps.length) {
+        clearInterval(interval);
+        const newBalance = balance - amountNum;
+        setBalance(newBalance);
+        localStorage.setItem("clickerBalance", String(newBalance));
+        setTxStatus("success");
+      }
+    }, 500);
+  };
+
+  const handleReset = () => {
+    setTxStatus("idle");
+    setStep(1);
+    setSelectedBank(null);
+    setAmount("");
+    setCardNum("");
+    setCardHolder("");
+    setPhone("");
+    setWalletNum("");
+    setProcessingStep(0);
   };
 
   const quickAmounts = [1000, 2000, 5000, 10000];
@@ -407,22 +425,6 @@ export default function Withdraw() {
                   )}
                 </div>
 
-                {/* Action buttons */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <button onClick={() => { setActionType("pay"); setShowGateway(true); }}
-                    className="py-3 rounded-xl font-bold text-sm transition-all hover-scale flex items-center justify-center gap-2"
-                    style={{ background: "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))", color: "hsl(220,30%,8%)" }}>
-                    <Icon name="CreditCard" size={15} />
-                    ОПЛАТИТЬ
-                  </button>
-                  <button onClick={() => { setActionType("topup"); setShowGateway(true); }}
-                    className="py-3 rounded-xl font-bold text-sm border transition-all hover-scale flex items-center justify-center gap-2 text-amber-400"
-                    style={{ border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)" }}>
-                    <Icon name="ArrowDownToLine" size={15} />
-                    ПОПОЛНИТЬ
-                  </button>
-                </div>
-
                 <button onClick={() => setStep(3)}
                   disabled={!amount || amountNum < 1000}
                   className="w-full py-3.5 rounded-xl font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover-scale flex items-center justify-center gap-2"
@@ -436,12 +438,12 @@ export default function Withdraw() {
         )}
 
         {/* ── STEP 3: CONFIRM ── */}
-        {step === 3 && bank && (
+        {step === 3 && bank && txStatus === "idle" && (
           <div className="animate-fade-in max-w-lg mx-auto w-full">
             <div className="flex items-center justify-between mb-4">
               <div className="text-slate-400 text-xs uppercase tracking-[0.15em] flex items-center gap-2">
                 <Icon name="ShieldCheck" size={14} />
-                Шаг 3 — Подтверждение
+                Шаг 3 — Подтверждение вывода
               </div>
               <button onClick={() => setStep(2)}
                 className="text-slate-500 text-xs hover:text-slate-300 flex items-center gap-1 transition-colors">
@@ -451,112 +453,189 @@ export default function Withdraw() {
             </div>
 
             <div className="navy-card rounded-2xl p-6 flex flex-col gap-5">
-              {/* Summary */}
-              <div className="rounded-2xl p-5 text-center"
-                style={{ background: "hsl(220,25%,16%)", border: "1px solid rgba(251,191,36,0.15)" }}>
-                <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Сумма транзакции</div>
-                <div className="text-4xl font-montserrat font-bold gold-text">{fmt(amountNum)} ₽</div>
-                <div className="text-slate-500 text-sm mt-1">{bank.name} · {method === "card" ? "Карта" : method === "sbp" ? "СБП" : "Кошелёк"}</div>
+              {/* Bank badge */}
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                style={{ background: bank.bgHover, border: `1px solid ${bank.border}` }}>
+                <span className="text-2xl">{bank.logo}</span>
+                <div>
+                  <div className="text-white font-semibold text-sm">{bank.name}</div>
+                  <div className="text-xs" style={{ color: bank.color }}>{bank.tagline}</div>
+                </div>
+                <div className="ml-auto text-xs font-semibold" style={{ color: bank.color }}>
+                  {method === "card" ? "Карта" : method === "sbp" ? "СБП" : "Кошелёк"}
+                </div>
               </div>
 
-              {/* Details list */}
-              <div className="flex flex-col gap-2">
+              {/* Amount hero */}
+              <div className="rounded-2xl p-6 text-center"
+                style={{ background: "hsl(220,25%,15%)", border: "1px solid rgba(251,191,36,0.2)" }}>
+                <div className="text-slate-400 text-xs uppercase tracking-wider mb-2">Сумма к выводу</div>
+                <div className="text-5xl font-montserrat font-black gold-text">{fmt(amountNum)} ₽</div>
+                <div className="flex items-center justify-center gap-4 mt-3 text-xs text-slate-500">
+                  <span>Комиссия: <span className="text-emerald-400 font-semibold">0 ₽</span></span>
+                  <span>·</span>
+                  <span>К зачислению: <span className="text-emerald-400 font-semibold">{fmt(amountNum)} ₽</span></span>
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="flex flex-col gap-0 rounded-xl overflow-hidden"
+                style={{ border: "1px solid hsl(220,20%,22%)" }}>
                 {[
-                  { label: "Получатель", value: method === "card" ? (cardNum || "—") : method === "sbp" ? (phone || "—") : (walletNum || "—") },
-                  { label: "Банк", value: bank.name },
-                  { label: "Способ", value: method === "card" ? "Карта" : method === "sbp" ? "СБП" : "Кошелёк" },
-                  { label: "Комиссия", value: "0 ₽" },
-                  { label: "К зачислению", value: `${fmt(amountNum)} ₽` },
-                  { label: "Срок зачисления", value: bank.timing },
-                ].map((r) => (
-                  <div key={r.label} className="flex justify-between items-center py-2"
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  { label: "Получатель", value: method === "card" ? (cardNum || "—") : method === "sbp" ? (phone || "—") : (walletNum || "—"), highlight: false },
+                  { label: "Держатель", value: cardHolder || "—", highlight: false },
+                  { label: "Банк", value: bank.name, highlight: false },
+                  { label: "Платёжная система", value: "Prodamus.pay · CMS модуль", highlight: false },
+                  { label: "Срок зачисления", value: bank.timing, highlight: false },
+                  { label: "Баланс после вывода", value: `${fmt(balance - amountNum)} ₽`, highlight: true },
+                ].filter(r => !(r.label === "Держатель" && method !== "card")).map((r, i, arr) => (
+                  <div key={r.label} className="flex justify-between items-center px-4 py-3"
+                    style={{ background: i % 2 === 0 ? "hsl(220,25%,16%)" : "hsl(220,25%,14%)", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
                     <span className="text-slate-400 text-sm">{r.label}</span>
-                    <span className={`text-sm font-semibold ${r.label === "К зачислению" ? "text-emerald-400" : r.label === "Комиссия" ? "text-emerald-400" : "text-white"}`}>{r.value}</span>
+                    <span className={`text-sm font-semibold ${r.highlight ? "text-amber-400" : "text-white"}`}>{r.value}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Security */}
-              <div className="flex items-center justify-center gap-4 text-xs text-slate-600">
-                <span className="flex items-center gap-1"><Icon name="Lock" size={11} />SSL/TLS</span>
-                <span className="flex items-center gap-1"><Icon name="ShieldCheck" size={11} />PCI DSS</span>
-                <span className="flex items-center gap-1"><Icon name="Fingerprint" size={11} />3D Secure</span>
+              {/* Prodamus gateway badge */}
+              <div className="rounded-xl p-4 flex items-center gap-4"
+                style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.15)" }}>
+                <div className="text-2xl">💳</div>
+                <div className="flex-1">
+                  <div className="text-white text-sm font-semibold">Платёжный шлюз Prodamus</div>
+                  <div className="text-slate-500 text-xs">P2P-транзакция · Физическое лицо · HTTPS</div>
+                </div>
+                <div className="flex flex-col gap-1 items-end">
+                  <div className="flex items-center gap-1 text-[10px] text-emerald-400">
+                    <Icon name="Wifi" size={10} />Онлайн
+                  </div>
+                  <div className="text-[10px] text-slate-500">Шлюз активен</div>
+                </div>
               </div>
 
-              <button onClick={handleConfirm}
-                className="w-full py-4 rounded-xl font-bold text-base transition-all hover-scale flex items-center justify-center gap-2"
-                style={{ background: "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))", color: "hsl(220,30%,8%)" }}>
-                <Icon name="CheckCircle" size={18} />
-                ПОДТВЕРДИТЬ ТРАНЗАКЦИЮ
+              {/* Security row */}
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {[
+                  { icon: "🔒", label: "SSL/TLS" },
+                  { icon: "🛡️", label: "PCI DSS" },
+                  { icon: "👆", label: "3D Secure" },
+                  { icon: "✅", label: "HTTPS" },
+                ].map((s) => (
+                  <div key={s.label} className="py-2 rounded-xl text-xs text-slate-500 flex flex-col items-center gap-1"
+                    style={{ background: "hsl(220,25%,16%)" }}>
+                    <span>{s.icon}</span>
+                    <span>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Confirm button */}
+              <button
+                onClick={handleConfirm}
+                disabled={amountNum < 1000 || amountNum > balance}
+                className="w-full py-4 rounded-xl font-black text-base transition-all hover-scale disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                style={{ background: "linear-gradient(135deg, hsl(43,90%,58%), hsl(38,82%,44%))", color: "hsl(220,30%,8%)", boxShadow: "0 6px 24px rgba(251,191,36,0.3)" }}>
+                <Icon name="SendHorizonal" size={20} />
+                ПОДТВЕРДИТЬ И ВЫВЕСТИ {fmt(amountNum)} ₽
               </button>
-            </div>
-          </div>
-        )}
 
-        {/* ── GATEWAY MODAL ── */}
-        {showGateway && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(12px)" }}>
-            <div className="w-full max-w-md rounded-3xl p-8 animate-scale-in"
-              style={{ background: "hsl(220,35%,12%)", border: "1px solid rgba(251,191,36,0.25)", boxShadow: "0 25px 80px rgba(0,0,0,0.7)" }}>
-
-              {!txSuccess ? (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="text-4xl mb-3">{actionType === "pay" ? "💳" : "📥"}</div>
-                    <div className="text-xl font-montserrat font-bold text-white">Платёжный шлюз</div>
-                    <div className="text-amber-400 font-semibold mt-0.5">Prodamus.pay</div>
-                    <div className="text-slate-500 text-sm mt-1">
-                      {actionType === "pay" ? "Оплата через" : "Пополнение через"} {bank?.name}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl p-5 mb-5 text-center"
-                    style={{ background: "hsl(220,25%,16%)", border: "1px solid rgba(251,191,36,0.12)" }}>
-                    <div className="text-slate-400 text-xs mb-1">Сумма платежа</div>
-                    <div className="text-3xl font-montserrat font-bold gold-text">{fmt(amountNum || 0)} ₽</div>
-                    <div className="text-slate-500 text-xs mt-1">{bank?.name} · Комиссия: 0 ₽</div>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-2 text-xs text-center text-slate-500">
-                      {["🔒 SSL/TLS", "🛡️ PCI DSS", "📱 3D Secure", "✅ HTTPS"].map((s) => (
-                        <div key={s} className="py-2 rounded-xl" style={{ background: "hsl(220,25%,17%)" }}>{s}</div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => { setShowGateway(false); setStep(3); }}
-                      className="w-full py-3.5 rounded-xl font-bold text-sm hover-scale"
-                      style={{ background: "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))", color: "hsl(220,30%,8%)" }}>
-                      Перейти к оплате →
-                    </button>
-                    <button onClick={() => setShowGateway(false)}
-                      className="text-slate-500 text-sm hover:text-slate-300 transition-colors py-1">
-                      Отмена
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="text-6xl mb-4">✅</div>
-                  <div className="text-xl font-montserrat font-bold text-emerald-400 mb-2">Транзакция выполнена!</div>
-                  <div className="text-slate-400 text-sm mb-1">SMS-уведомление отправлено</div>
-                  <div className="text-slate-500 text-xs">ID: TXN-{Date.now().toString().slice(-8)}</div>
-                </div>
+              {amountNum < 1000 && (
+                <div className="text-center text-xs text-rose-400">Минимальная сумма вывода — 1 000 ₽</div>
+              )}
+              {amountNum > balance && balance > 0 && (
+                <div className="text-center text-xs text-rose-400">Недостаточно средств на балансе</div>
               )}
             </div>
           </div>
         )}
 
-        {/* ── SUCCESS TOAST ── */}
-        {txSuccess && (
-          <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 animate-fade-in px-6 py-4 rounded-2xl flex items-center gap-3"
-            style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", backdropFilter: "blur(12px)" }}>
-            <Icon name="CheckCircle" size={20} className="text-emerald-400" />
-            <div>
-              <div className="text-emerald-400 font-semibold text-sm">Транзакция подтверждена!</div>
-              <div className="text-slate-400 text-xs">SMS-уведомление отправлено на ваш номер</div>
+        {/* ── PROCESSING ── */}
+        {step === 3 && txStatus === "processing" && (
+          <div className="animate-scale-in max-w-lg mx-auto w-full">
+            <div className="navy-card rounded-2xl p-8 flex flex-col items-center gap-6">
+              <div className="relative w-20 h-20">
+                <svg className="w-full h-full -rotate-90 animate-spin" style={{ animationDuration: "2s" }} viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="hsl(220,25%,20%)" strokeWidth="6" />
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="hsl(43,90%,55%)" strokeWidth="6"
+                    strokeLinecap="round" strokeDasharray="140" strokeDashoffset="70" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center text-2xl">💳</div>
+              </div>
+
+              <div className="text-center">
+                <div className="text-white font-montserrat font-bold text-lg mb-1">Обработка транзакции</div>
+                <div className="text-amber-400 text-sm animate-pulse">
+                  {processingSteps[Math.min(processingStep, processingSteps.length - 1)]}
+                </div>
+              </div>
+
+              <div className="w-full flex flex-col gap-2">
+                {processingSteps.map((s, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 transition-all duration-300 ${
+                      i < processingStep ? "bg-emerald-500 text-white" :
+                      i === processingStep ? "bg-amber-400 text-slate-900" :
+                      "bg-slate-700 text-slate-500"
+                    }`}>
+                      {i < processingStep ? "✓" : i + 1}
+                    </div>
+                    <div className={`text-sm transition-all ${i < processingStep ? "text-emerald-400" : i === processingStep ? "text-white" : "text-slate-600"}`}>
+                      {s}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="w-full h-2 rounded-full overflow-hidden bg-slate-700">
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${(processingStep / processingSteps.length) * 100}%`,
+                    background: "linear-gradient(90deg, hsl(43,90%,45%), hsl(43,90%,60%))"
+                  }} />
+              </div>
+              <div className="text-slate-500 text-xs">Не закрывайте страницу во время обработки</div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SUCCESS ── */}
+        {txStatus === "success" && (
+          <div className="animate-scale-in max-w-lg mx-auto w-full">
+            <div className="navy-card rounded-2xl p-8 flex flex-col items-center gap-5 text-center">
+              <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+                style={{ background: "rgba(52,211,153,0.15)", border: "2px solid rgba(52,211,153,0.4)" }}>
+                ✅
+              </div>
+              <div>
+                <div className="text-2xl font-montserrat font-black text-emerald-400 mb-1">Транзакция выполнена!</div>
+                <div className="text-slate-400 text-sm">Средства успешно отправлены на счёт</div>
+              </div>
+
+              <div className="w-full rounded-2xl p-5"
+                style={{ background: "hsl(220,25%,15%)", border: "1px solid rgba(52,211,153,0.2)" }}>
+                <div className="text-slate-400 text-xs mb-3 uppercase tracking-wider">Детали транзакции</div>
+                {[
+                  { label: "Сумма", value: `${fmt(amountNum)} ₽`, color: "text-emerald-400" },
+                  { label: "Банк", value: bank?.name || "—", color: "text-white" },
+                  { label: "Получатель", value: method === "card" ? cardNum : method === "sbp" ? phone : walletNum || "—", color: "text-white" },
+                  { label: "ID транзакции", value: txId, color: "text-amber-400" },
+                  { label: "Статус", value: "Выполнено", color: "text-emerald-400" },
+                ].map((r) => (
+                  <div key={r.label} className="flex justify-between py-2"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span className="text-slate-500 text-sm">{r.label}</span>
+                    <span className={`text-sm font-semibold ${r.color}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-slate-500 text-xs">Новый баланс: <span className="text-amber-400 font-semibold">{fmt(balance)} ₽</span></div>
+
+              <button onClick={handleReset}
+                className="w-full py-3.5 rounded-xl font-bold text-sm hover-scale"
+                style={{ background: "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))", color: "hsl(220,30%,8%)" }}>
+                Сделать ещё один вывод
+              </button>
             </div>
           </div>
         )}
