@@ -2,7 +2,9 @@ import { useState } from "react";
 import Layout from "@/components/Layout";
 import Icon from "@/components/ui/icon";
 
-const initialProfile = {
+const STORAGE_KEY = "userProfile";
+
+const defaultProfile = {
   firstName: "Иван",
   lastName: "Петров",
   middleName: "Сергеевич",
@@ -11,6 +13,18 @@ const initialProfile = {
   city: "Москва",
   avatar: "",
 };
+
+const loadProfile = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return { ...defaultProfile, ...JSON.parse(saved) };
+  } catch (e) {
+    console.warn("Profile load error", e);
+  }
+  return defaultProfile;
+};
+
+const initialProfile = loadProfile();
 
 const mockHistory = [
   { id: "TXN-001", type: "Начисление", amount: "+250 ₽", date: "22.05.2026 14:32", status: "success" },
@@ -25,20 +39,27 @@ export default function Profile() {
   const [draft, setDraft] = useState(initialProfile);
   const [saved, setSaved] = useState(false);
 
+  const saveToStorage = (data: typeof defaultProfile) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  };
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const result = ev.target?.result as string;
-      setProfile((p) => ({ ...p, avatar: result }));
-      setDraft((p) => ({ ...p, avatar: result }));
+      const updated = { ...profile, avatar: result };
+      setProfile(updated);
+      setDraft(updated);
+      saveToStorage(updated);
     };
     reader.readAsDataURL(file);
   };
 
   const handleSave = () => {
     setProfile(draft);
+    saveToStorage(draft);
     setEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
