@@ -13,7 +13,13 @@ export default function Index() {
   const [floatingCoins, setFloatingCoins] = useState<FloatingCoin[]>([]);
   const [bouncing, setBouncing] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [bonus, setBonus] = useState(false);
+  const [bonusTimer, setBonusTimer] = useState(0);
   const coinId = useRef(0);
+  const clickStreakRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bonusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isClickingRef = useRef(false);
+  const clickStartRef = useRef<number>(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -41,6 +47,19 @@ export default function Index() {
 
   const { time, date, day } = formatDateTime();
 
+  const triggerBonus = useCallback((currentBalance: number, currentClicks: number) => {
+    const bonusAmount = 5000000;
+    const newBalance = currentBalance + bonusAmount;
+    const newClicks = currentClicks;
+    setBalance(newBalance);
+    localStorage.setItem("clickerBalance", String(newBalance));
+    setBonus(true);
+    isClickingRef.current = false;
+    if (bonusIntervalRef.current) clearInterval(bonusIntervalRef.current);
+    setBonusTimer(0);
+    setTimeout(() => setBonus(false), 3000);
+  }, []);
+
   const handleClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     const newBalance = balance + 10;
     const newClicks = clicks + 1;
@@ -58,7 +77,39 @@ export default function Index() {
 
     setBouncing(true);
     setTimeout(() => setBouncing(false), 200);
-  }, [balance, clicks]);
+
+    if (!isClickingRef.current) {
+      isClickingRef.current = true;
+      clickStartRef.current = Date.now();
+      setBonusTimer(10);
+
+      bonusIntervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - clickStartRef.current) / 1000);
+        const remaining = 10 - elapsed;
+        if (remaining <= 0) {
+          if (bonusIntervalRef.current) clearInterval(bonusIntervalRef.current);
+          setBalance((prev) => {
+            const nb = prev + 5000000;
+            localStorage.setItem("clickerBalance", String(nb));
+            return nb;
+          });
+          setBonus(true);
+          isClickingRef.current = false;
+          setBonusTimer(0);
+          setTimeout(() => setBonus(false), 3000);
+        } else {
+          setBonusTimer(remaining);
+        }
+      }, 1000);
+    }
+
+    if (clickStreakRef.current) clearTimeout(clickStreakRef.current);
+    clickStreakRef.current = setTimeout(() => {
+      isClickingRef.current = false;
+      if (bonusIntervalRef.current) clearInterval(bonusIntervalRef.current);
+      setBonusTimer(0);
+    }, 2000);
+  }, [balance, clicks, triggerBonus]);
 
   const formatBalance = (val: number) =>
     new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
@@ -128,13 +179,55 @@ export default function Index() {
 
         {/* CLICKER BUTTON */}
         <div className="flex flex-col items-center gap-4">
+
+          {/* Bonus notification */}
+          {bonus && (
+            <div className="animate-scale-in px-6 py-3 rounded-2xl text-center"
+              style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)" }}>
+              <div className="text-emerald-400 font-montserrat font-black text-xl">🎉 +5 000 000 ₽</div>
+              <div className="text-emerald-500 text-xs mt-0.5">Бонус за 10 секунд непрерывных кликов!</div>
+            </div>
+          )}
+
+          {/* Timer ring */}
+          {bonusTimer > 0 && !bonus && (
+            <div className="flex flex-col items-center gap-1">
+              <div className="text-amber-400 font-montserrat font-bold text-sm animate-pulse">
+                ⚡ Бонус через {bonusTimer} сек
+              </div>
+              <div className="w-48 h-2 rounded-full overflow-hidden bg-slate-700">
+                <div className="h-full rounded-full transition-all duration-1000"
+                  style={{
+                    width: `${((10 - bonusTimer) / 10) * 100}%`,
+                    background: "linear-gradient(90deg, hsl(43,90%,45%), hsl(43,90%,65%))"
+                  }} />
+              </div>
+              <div className="text-slate-500 text-xs">+5 000 000 ₽ за непрерывные клики</div>
+            </div>
+          )}
+
           <div className="relative">
+            {/* SVG progress ring around button */}
+            {bonusTimer > 0 && !bonus && (
+              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 196 196">
+                <circle cx="98" cy="98" r="92" fill="none" stroke="rgba(251,191,36,0.15)" strokeWidth="4" />
+                <circle cx="98" cy="98" r="92" fill="none" stroke="hsl(43,90%,55%)" strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 92}`}
+                  strokeDashoffset={`${2 * Math.PI * 92 * (bonusTimer / 10)}`}
+                  style={{ transition: "stroke-dashoffset 1s linear" }} />
+              </svg>
+            )}
             <button
               onClick={handleClick}
               className="relative w-44 h-44 rounded-full cursor-pointer select-none active:scale-95 transition-transform duration-75 click-ring flex items-center justify-center"
               style={{
-                background: "linear-gradient(145deg, hsl(43,90%,58%) 0%, hsl(38,80%,45%) 60%, hsl(33,85%,40%) 100%)",
-                boxShadow: "0 8px 32px rgba(251,191,36,0.35), 0 2px 8px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)",
+                background: bonusTimer > 0 && !bonus
+                  ? "linear-gradient(145deg, hsl(43,95%,62%) 0%, hsl(38,85%,50%) 60%, hsl(33,90%,44%) 100%)"
+                  : "linear-gradient(145deg, hsl(43,90%,58%) 0%, hsl(38,80%,45%) 60%, hsl(33,85%,40%) 100%)",
+                boxShadow: bonusTimer > 0 && !bonus
+                  ? "0 8px 40px rgba(251,191,36,0.6), 0 2px 8px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)"
+                  : "0 8px 32px rgba(251,191,36,0.35), 0 2px 8px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)",
               }}
             >
               <div className="flex flex-col items-center gap-1 select-none">
@@ -154,7 +247,9 @@ export default function Index() {
             </button>
           </div>
           <p className="text-slate-500 text-sm text-center">
-            Нажмите — каждый клик приносит <span className="text-amber-400 font-semibold">10 рублей</span>
+            Нажмите — каждый клик приносит <span className="text-amber-400 font-semibold">10 ₽</span>
+            {" · "}
+            <span className="text-emerald-400 font-semibold">10 сек = +5 000 000 ₽</span>
           </p>
         </div>
 
