@@ -25,6 +25,18 @@ export default function Profile() {
   const [draft, setDraft] = useState(initialProfile);
   const [saved, setSaved] = useState(false);
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setProfile((p) => ({ ...p, avatar: result }));
+      setDraft((p) => ({ ...p, avatar: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = () => {
     setProfile(draft);
     setEditing(false);
@@ -63,10 +75,12 @@ export default function Profile() {
                 ) : (
                   <span>👤</span>
                 )}
-                <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ background: "hsl(220,30%,20%)", border: "2px solid hsl(220,30%,12%)" }}>
+                <label className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer hover:brightness-125 transition-all"
+                  style={{ background: "hsl(220,30%,20%)", border: "2px solid hsl(220,30%,12%)" }}
+                  title="Сменить фото">
                   <Icon name="Camera" size={14} className="text-amber-400" />
-                </button>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                </label>
               </div>
               <div className="text-center">
                 <div className="font-semibold text-white">{profile.lastName} {profile.firstName}</div>
