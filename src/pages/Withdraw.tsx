@@ -477,40 +477,16 @@ export default function Withdraw() {
                 ))}
               </div>
 
-              {/* SMS confirm */}
-              <div className="rounded-xl p-4" style={{ background: "hsl(220,25%,15%)", border: "1px solid hsl(220,20%,24%)" }}>
-                <div className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                  <Icon name="MessageSquare" size={15} className="text-amber-400" />
-                  SMS-подтверждение
-                </div>
-                <div className="flex gap-2">
-                  <input value={smsCode} onChange={(e) => setSmsCode(e.target.value)}
-                    placeholder="Код из SMS"
-                    className="flex-1 rounded-xl px-4 py-2.5 text-white outline-none text-sm font-mono tracking-widest"
-                    style={{ background: "hsl(220,25%,18%)", border: "1px solid rgba(251,191,36,0.2)" }} />
-                  <button onClick={handleSendCode}
-                    className={`px-4 rounded-xl text-xs font-semibold transition-all flex-shrink-0 ${codeSent ? "text-emerald-400" : "text-amber-400"}`}
-                    style={codeSent
-                      ? { background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)" }
-                      : { background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)" }}>
-                    {codeSent ? "Отправлено ✓" : "Получить код"}
-                  </button>
-                </div>
-                {codeSent && <div className="text-xs text-slate-500 mt-2">Код отправлен на номер, указанный в профиле</div>}
-              </div>
-
               {/* Security */}
               <div className="flex items-center justify-center gap-4 text-xs text-slate-600">
                 <span className="flex items-center gap-1"><Icon name="Lock" size={11} />SSL/TLS</span>
                 <span className="flex items-center gap-1"><Icon name="ShieldCheck" size={11} />PCI DSS</span>
                 <span className="flex items-center gap-1"><Icon name="Fingerprint" size={11} />3D Secure</span>
-                <span className="flex items-center gap-1"><Icon name="MessageSquare" size={11} />SMS</span>
               </div>
 
               <button onClick={handleConfirm}
-                disabled={!codeSent}
-                className="w-full py-4 rounded-xl font-bold text-base transition-all hover-scale disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{ background: codeSent ? "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))" : "hsl(220,25%,18%)", color: codeSent ? "hsl(220,30%,8%)" : "#64748b" }}>
+                className="w-full py-4 rounded-xl font-bold text-base transition-all hover-scale flex items-center justify-center gap-2"
+                style={{ background: "linear-gradient(135deg, hsl(43,90%,55%), hsl(38,80%,42%))", color: "hsl(220,30%,8%)" }}>
                 <Icon name="CheckCircle" size={18} />
                 ПОДТВЕРДИТЬ ТРАНЗАКЦИЮ
               </button>
